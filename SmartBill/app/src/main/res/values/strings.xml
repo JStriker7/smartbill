@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">智能记账</string>
+    <string name="notification_listener_service_desc">用于监听微信、支付宝等支付通知，自动记录消费</string>
+</resources>
