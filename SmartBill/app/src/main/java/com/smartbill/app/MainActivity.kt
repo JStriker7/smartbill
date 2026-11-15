@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewModel: MainViewModel
     private lateinit var adapter: TransactionAdapter
     private val expenseCategories = listOf(
-        "餐饮", "娱乐", "购物", "交通", "日用", "人情往来", "居住", "医疗", "教育", "其他"
+        "餐饮", "娱乐", "购物", "交通", "日用", "服务", "人情往来", "转账", "居住", "医疗", "教育", "其他"
     )
 
     private val weChatBillPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -219,7 +219,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCategoryDialog(transaction: Transaction) {
-        val options = if (transaction.isIncome) listOf("工资", "人情往来", "退款", "其他") else expenseCategories
+        val options = if (transaction.isIncome) listOf("工资", "人情往来", "转账", "收款", "退款", "其他") else expenseCategories
         val categories = (options + WeChatBillImporter.UNCATEGORIZED + transaction.category).distinct().toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("修改用途分类")

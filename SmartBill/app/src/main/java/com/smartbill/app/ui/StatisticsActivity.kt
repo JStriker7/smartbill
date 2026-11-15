@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.View
+import android.content.res.ColorStateList
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -16,6 +17,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.smartbill.app.data.Transaction
 import java.text.NumberFormat
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -110,22 +112,27 @@ class StatisticsActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         }
         content.addView(summary, MATCH_PARENT, WRAP_CONTENT)
-        addBreakdown("支出分类", expenses, spent)
-        addBreakdown("收入分类", income, received)
+        addBreakdown("支出构成", expenses, spent)
+        addDailyComparison(expenses)
+        addMonthlyComparison()
+        addExpenseRanking(expenses)
+        addBreakdown("收入构成", income, received)
     }
 
     private fun addBreakdown(title: String, rows: List<Transaction>, total: Double) {
-        content.addView(TextView(this).apply {
-            text = title
-            textSize = 20f
-            setPadding(0, dp(16), 0, dp(4))
-        })
+        addSection(title)
         if (rows.isEmpty()) {
             content.addView(TextView(this).apply { text = "这个月暂无记录" })
             return
         }
         val groups = rows.groupBy { it.category }.entries.sortedByDescending { (_, entries) -> entries.sumOf { it.amount } }
-        for ((category, entries) in groups) {
+        if (total > 0) {
+            content.addView(ExpenseRing(this, groups.map { group -> group.value.sumOf { it.amount } }).apply {
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, MATCH_PARENT, dp(208))
+        }
+        for ((index, group) in groups.withIndex()) {
+            val (category, entries) = group
             val value = entries.sumOf { it.amount }
             val ratio = if (total > 0) value / total else 0.0
             val percent = NumberFormat.getPercentInstance().apply { maximumFractionDigits = 1 }.format(ratio)
@@ -137,9 +144,76 @@ class StatisticsActivity : AppCompatActivity() {
             content.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
                 max = 1000
                 progress = (ratio * max).roundToInt()
+                progressTintList = ColorStateList.valueOf(summaryColors[index % summaryColors.size])
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, MATCH_PARENT, dp(6))
         }
+    }
+
+    private fun addDailyComparison(expenses: List<Transaction>) {
+        addSection("每日对比")
+        val dates = (1..month.lengthOfMonth()).map(month::atDay)
+        val byDate = expenses.groupBy { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
+        val values = dates.map { byDate[it].orEmpty().sumOf(Transaction::amount) }
+        val labels = dates.map { day -> if (day.dayOfMonth in listOf(1, 5, 10, 15, 20, 25, 30)) day.dayOfMonth.toString() else "" }
+        val today = LocalDate.now(zone)
+        val latest = dates.indexOf(today).takeIf { it >= 0 } ?: values.indexOfLast { it > 0 }
+        val selectedDay = maxOf(latest, 0)
+        val daySummary = Button(this).apply { isAllCaps = false }
+
+        fun selectDay(index: Int) {
+            val date = dates[index]
+            val rows = byDate[date].orEmpty()
+            val label = "${date.monthValue}月${date.dayOfMonth}日"
+            daySummary.text = "$label 共支出 ${currency.format(values[index])} · ${rows.size} 笔"
+            daySummary.isEnabled = rows.isNotEmpty()
+            daySummary.setOnClickListener { showCategory(label, rows) }
+        }
+
+        selectDay(selectedDay)
+        content.addView(ExpenseBars(this, values, labels, selectedDay, false, ::selectDay), MATCH_PARENT, dp(170))
+        content.addView(daySummary, MATCH_PARENT, WRAP_CONTENT)
+    }
+
+    private fun addMonthlyComparison() {
+        addSection("月度对比")
+        val months = (5 downTo 0).map { month.minusMonths(it.toLong()) }
+        val totals = transactions.filterNot { it.isIncome }.groupBy(::transactionMonth)
+        val values = months.map { totals[it].orEmpty().sumOf(Transaction::amount) }
+        content.addView(ExpenseBars(this, values, months.map { "${it.monthValue}月" }, 5, true) { index ->
+            month = months[index]
+            render()
+        }, MATCH_PARENT, dp(166))
+        if (months.any { it !in totals }) {
+            content.addView(TextView(this).apply { text = "无柱形的月份没有支出记录" })
+        }
+    }
+
+    private fun addExpenseRanking(expenses: List<Transaction>) {
+        addSection("${month.monthValue}月支出排行")
+        if (expenses.isEmpty()) {
+            content.addView(TextView(this).apply { text = "这个月暂无支出" })
+            return
+        }
+        expenses.sortedByDescending(Transaction::amount).take(10).forEachIndexed { index, item ->
+            content.addView(Button(this).apply {
+                text = "${index + 1}  ${item.category} · ${currency.format(item.amount)}\n" +
+                    "${dateFormat.format(Instant.ofEpochMilli(item.timestamp))}  ${item.appName}"
+                isAllCaps = false
+                gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                setMaxLines(3)
+                setOnClickListener { showCategory(item.category, listOf(item)) }
+            }, MATCH_PARENT, WRAP_CONTENT)
+        }
+    }
+
+    private fun addSection(title: String) {
+        content.addView(TextView(this).apply {
+            text = title
+            textSize = 20f
+            setPadding(0, dp(20), 0, dp(6))
+            if (android.os.Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true
+        })
     }
 
     private fun showCategory(category: String, rows: List<Transaction>) {

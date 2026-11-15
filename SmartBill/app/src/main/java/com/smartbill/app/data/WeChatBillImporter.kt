@@ -24,14 +24,15 @@ object WeChatBillImporter {
     private val requiredHeaders = listOf("交易时间", "交易类型", "交易对方", "商品", "收/支", "金额(元)", "支付方式")
 
     private val categoryKeywords = listOf(
-        "交通" to listOf("地铁", "公交", "铁路", "火车票", "12306", "打车", "滴滴", "停车", "加油", "高德打车", "共享单车", "哈啰"),
+        "交通" to listOf("地铁", "公交", "铁路", "火车票", "12306", "打车", "滴滴", "停车", "加油", "高德打车", "共享单车", "哈啰", "曹操特惠"),
         "医疗" to listOf("医院", "药店", "药房", "挂号", "门诊", "体检", "药品"),
         "居住" to listOf("房租", "物业", "水费", "电费", "燃气", "住宿", "酒店"),
         "教育" to listOf("学费", "培训", "教材", "课程", "书店", "考试报名"),
-        "娱乐" to listOf("电影", "影院", "游戏", "剧本杀", "演出", "网吧", "台球", "腾讯视频", "爱奇艺", "哔哩哔哩", "网易云音乐", "健身", "游乐"),
-        "餐饮" to listOf("餐饮", "外卖", "餐厅", "奶茶", "咖啡", "面包", "食堂", "饭店", "火锅", "烧烤", "快餐", "早餐", "炸鸡", "麻辣烫", "汉堡", "瑞幸", "肯德基", "麦当劳", "饿了么", "美团外卖", "小吃", "面馆", "米线", "炸串", "盖饭", "寿司", "茶饮"),
+        "娱乐" to listOf("电影", "影院", "游戏", "剧本杀", "演出", "网吧", "台球", "腾讯视频", "爱奇艺", "哔哩哔哩", "网易云音乐", "健身", "游乐", "电竞", "点券", "王者荣耀"),
+        "餐饮" to listOf("餐饮", "外卖", "餐厅", "奶茶", "咖啡", "面包", "食堂", "饭店", "火锅", "烧烤", "快餐", "早餐", "炸鸡", "麻辣烫", "汉堡", "瑞幸", "肯德基", "麦当劳", "饿了么", "美团外卖", "小吃", "面馆", "米线", "炸串", "盖饭", "寿司", "茶饮", "抄手", "重庆小面", "凉皮", "烧肉", "拌饭", "烧饼", "肉夹馍", "酸辣粉"),
         "日用" to listOf("超市", "便利店", "生鲜", "菜市场", "日用品", "洗衣", "理发"),
-        "购物" to listOf("淘宝", "天猫", "京东", "拼多多", "服饰", "数码", "百货", "网购")
+        "购物" to listOf("淘宝", "天猫", "京东", "拼多多", "服饰", "数码", "百货", "网购"),
+        "服务" to listOf("服务器租赁", "烫发", "染发", "按摩", "维修", "快递", "云服务")
     )
 
     data class Bill(val transactions: List<Transaction>, val skipped: Int)
@@ -113,7 +114,9 @@ object WeChatBillImporter {
         val description = "$merchant $product"
         val category = categoryKeywords.firstOrNull { (_, keywords) -> keywords.any(description::contains) }?.first
         if (!income && category != null) return category
-        if (type.contains("转账") || type.contains("红包") || type.contains("收款")) return "人情往来"
+        if (type.contains("转账")) return "转账"
+        if (type.contains("红包")) return "人情往来"
+        if (income && type.contains("收款")) return "收款"
         return UNCATEGORIZED
     }
 
