@@ -24,6 +24,10 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
         return transactionDao.getTotalAmountInRange(startTime, endTime) ?: 0.0
     }
 
+    suspend fun updateCategory(id: Long, category: String) {
+        transactionDao.updateCategory(id, category)
+    }
+
     suspend fun deleteById(id: Long) {
         transactionDao.deleteById(id)
     }

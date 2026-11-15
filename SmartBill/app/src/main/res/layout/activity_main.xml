@@ -30,6 +30,14 @@
             android:textStyle="bold" />
 
         <ImageButton
+            android:id="@+id/btnAddExpense"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="手动记账"
+            android:src="@android:drawable/ic_input_add" />
+
+        <ImageButton
             android:id="@+id/btnRefresh"
             android:layout_width="48dp"
             android:layout_height="48dp"

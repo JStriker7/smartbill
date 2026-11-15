@@ -11,6 +11,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class TransactionAdapter(
+    private val onClick: (Transaction) -> Unit,
     private val onLongClick: (Transaction) -> Unit
 ) : ListAdapter<Transaction, TransactionAdapter.TransactionViewHolder>(TransactionDiffCallback()) {
 
@@ -20,7 +21,7 @@ class TransactionAdapter(
             parent,
             false
         )
-        return TransactionViewHolder(binding, onLongClick)
+        return TransactionViewHolder(binding, onClick, onLongClick)
     }
 
     override fun onBindViewHolder(holder: TransactionViewHolder, position: Int) {
@@ -29,6 +30,7 @@ class TransactionAdapter(
 
     class TransactionViewHolder(
         private val binding: ItemTransactionBinding,
+        private val onClick: (Transaction) -> Unit,
         private val onLongClick: (Transaction) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
@@ -47,6 +49,7 @@ class TransactionAdapter(
                 tvTime.text = dateFormat.format(Date(transaction.timestamp))
                 tvCategory.text = transaction.category
 
+                root.setOnClickListener { onClick(transaction) }
                 root.setOnLongClickListener {
                     onLongClick(transaction)
                     true

@@ -72,6 +72,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    suspend fun addManualExpense(amount: Double, category: String, description: String) {
+        repository.insert(
+            Transaction(
+                amount = amount,
+                appName = "手动记账",
+                paymentMethod = "",
+                merchantName = description,
+                timestamp = System.currentTimeMillis(),
+                source = "manual",
+                category = category
+            )
+        )
+    }
+
+    suspend fun updateCategory(id: Long, category: String) {
+        repository.updateCategory(id, category)
+    }
+
     fun deleteTransaction(id: Long) = viewModelScope.launch {
         repository.deleteById(id)
     }

@@ -31,6 +31,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE timestamp >= :startTime AND timestamp <= :endTime ORDER BY timestamp DESC")
     fun getTransactionsInRange(startTime: Long, endTime: Long): Flow<List<Transaction>>
 
+    @Query("UPDATE transactions SET category = :category WHERE id = :id")
+    suspend fun updateCategory(id: Long, category: String)
+
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: Long)
 

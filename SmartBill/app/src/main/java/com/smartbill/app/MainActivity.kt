@@ -8,25 +8,38 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.TextUtils
+import android.text.InputType
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Spinner
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.smartbill.app.databinding.ActivityMainBinding
 import com.smartbill.app.service.PaymentNotificationListener
 import com.smartbill.app.ui.MainViewModel
 import com.smartbill.app.ui.TransactionAdapter
-import java.text.SimpleDateFormat
-import java.util.*
+import com.smartbill.app.data.Transaction
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var viewModel: MainViewModel
     private lateinit var adapter: TransactionAdapter
+    private val expenseCategories = listOf(
+        "餐饮", "娱乐", "购物", "交通", "日用", "人情往来", "居住", "医疗", "教育", "其他"
+    )
 
     private val smsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -52,7 +65,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        adapter = TransactionAdapter { transaction ->
+        adapter = TransactionAdapter(::showCategoryDialog) { transaction ->
             // 长按删除
             AlertDialog.Builder(this)
                 .setTitle("删除记录")
@@ -72,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         // 观察交易记录
         viewModel.allTransactions.observe(this) { transactions ->
             adapter.submitList(transactions)
+            updateStatistics()
             binding.emptyView.visibility = if (transactions.isEmpty()) {
                 android.view.View.VISIBLE
             } else {
@@ -84,8 +98,6 @@ class MainActivity : AppCompatActivity() {
             // 更新统计卡片会在后面实现
         }
 
-        // 更新统计数据
-        updateStatistics()
     }
 
     private fun updateStatistics() {
@@ -109,6 +121,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
+        binding.btnAddExpense.setOnClickListener { showManualExpenseDialog() }
         binding.btnSettings.setOnClickListener {
             showSettingsDialog()
         }
@@ -116,6 +129,96 @@ class MainActivity : AppCompatActivity() {
         binding.btnRefresh.setOnClickListener {
             updateStatistics()
             Toast.makeText(this, "已刷新", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showCategoryDialog(transaction: Transaction) {
+        val categories = (expenseCategories + transaction.category).distinct().toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("修改支出分类")
+            .setSingleChoiceItems(categories, categories.indexOf(transaction.category)) { dialog, index ->
+                lifecycleScope.launch {
+                    if (saveExpenseChange { viewModel.updateCategory(transaction.id, categories[index]) }) {
+                        dialog.dismiss()
+                    }
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showManualExpenseDialog() {
+        val amount = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            hint = "金额（元）"
+        }
+        val description = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            hint = "用途备注（选填）"
+        }
+        val category = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity, android.R.layout.simple_spinner_dropdown_item, expenseCategories
+            )
+            setSelection(expenseCategories.lastIndex)
+        }
+        val categoryLabel = TextView(this).apply {
+            text = "支出分类"
+            category.id = android.view.View.generateViewId()
+            labelFor = category.id
+        }
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (24 * resources.displayMetrics.density).roundToInt()
+            setPadding(padding, 0, padding, 0)
+            for (field in listOf(amount, categoryLabel, category, description)) {
+                addView(field, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            }
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("手动记一笔支出")
+            .setView(fields)
+            .setPositiveButton("保存", null)
+            .setNegativeButton("取消", null)
+            .show()
+
+        val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        saveButton.setOnClickListener {
+            val input = amount.text.toString().trim().replace(',', '.')
+            val value = input.toDoubleOrNull()
+            if (!input.matches(Regex("""\d+(?:\.\d{1,2})?""")) ||
+                value == null || !value.isFinite() || value <= 0
+            ) {
+                amount.error = "请输入大于 0、最多两位小数的金额"
+                return@setOnClickListener
+            }
+            val selectedCategory = category.selectedItem as String
+            val note = description.text.toString().trim()
+            saveButton.isEnabled = false
+            dialog.setCancelable(false)
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled = false
+            lifecycleScope.launch {
+                if (saveExpenseChange { viewModel.addManualExpense(value, selectedCategory, note) }) {
+                    dialog.dismiss()
+                } else {
+                    dialog.setCancelable(true)
+                    saveButton.isEnabled = true
+                    dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled = true
+                }
+            }
+        }
+    }
+
+    private suspend fun saveExpenseChange(write: suspend () -> Unit): Boolean {
+        return try {
+            write()
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.e("MainActivity", "Could not save expense change", error)
+            Toast.makeText(this, "保存失败，请重试", Toast.LENGTH_SHORT).show()
+            false
         }
     }
 
