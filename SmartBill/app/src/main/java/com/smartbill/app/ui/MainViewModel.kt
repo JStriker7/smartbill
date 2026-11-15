@@ -72,6 +72,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    suspend fun newImportRows(rows: List<Transaction>) = repository.newImportRows(rows)
+
+    suspend fun possibleWeChatDuplicates(rows: List<Transaction>) = repository.possibleWeChatDuplicates(rows)
+
+    suspend fun insertImported(rows: List<Transaction>) = repository.insertImported(rows)
+
     suspend fun addManualExpense(amount: Double, category: String, description: String) {
         repository.insert(
             Transaction(

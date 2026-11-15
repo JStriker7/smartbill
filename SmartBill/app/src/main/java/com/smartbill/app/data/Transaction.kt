@@ -1,9 +1,11 @@
 package com.smartbill.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "transactions")
+@Entity(tableName = "transactions", indices = [Index(value = ["importKey"], unique = true)])
 data class Transaction(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -15,5 +17,8 @@ data class Transaction(
     val timestamp: Long,             // 时间戳
     val source: String,              // 来源：notification/sms
     val rawText: String = "",        // 原始文本
-    val category: String = "其他"     // 分类
+    val category: String = "其他",
+    @ColumnInfo(defaultValue = "0")
+    val isIncome: Boolean = false,
+    val importKey: String? = null
 )

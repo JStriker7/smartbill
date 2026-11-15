@@ -8,6 +8,28 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
 
     val appStatistics: Flow<List<AppStatistics>> = transactionDao.getAppStatistics()
 
+    suspend fun newImportRows(rows: List<Transaction>): List<Transaction> {
+        val existingKeys = transactionDao.getImportKeys().toSet()
+        return rows.distinctBy(Transaction::importKey).filter { it.importKey !in existingKeys }
+    }
+
+    suspend fun possibleWeChatDuplicates(rows: List<Transaction>): List<Transaction> {
+        if (rows.isEmpty()) return emptyList()
+        val tolerance = 120_000L
+        val existing = transactionDao.getPossibleWeChatMatches(
+            rows.minOf { it.timestamp } - tolerance, rows.maxOf { it.timestamp } + tolerance
+        ).groupBy { it.amount to it.isIncome }
+        return rows.filter { row ->
+            existing[row.amount to row.isIncome].orEmpty().any {
+                kotlin.math.abs(row.timestamp - it.timestamp) <= tolerance
+            }
+        }
+    }
+
+    suspend fun insertImported(rows: List<Transaction>): Int {
+        return transactionDao.insertImported(rows).count { it != -1L }
+    }
+
     suspend fun insert(transaction: Transaction) {
         transactionDao.insert(transaction)
     }

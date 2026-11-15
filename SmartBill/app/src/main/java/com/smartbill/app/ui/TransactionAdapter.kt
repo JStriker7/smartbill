@@ -39,7 +39,11 @@ class TransactionAdapter(
         fun bind(transaction: Transaction) {
             binding.apply {
                 tvAppName.text = transaction.appName
-                tvAmount.text = String.format("¥%.2f", transaction.amount)
+                tvAmount.text = if (transaction.isIncome) {
+                    String.format("收入 +¥%.2f", transaction.amount)
+                } else {
+                    String.format("¥%.2f", transaction.amount)
+                }
                 tvPaymentMethod.text = transaction.paymentMethod
                 tvMerchant.text = if (transaction.merchantName.isNotEmpty()) {
                     transaction.merchantName

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -28,8 +29,12 @@ import com.smartbill.app.service.PaymentNotificationListener
 import com.smartbill.app.ui.MainViewModel
 import com.smartbill.app.ui.TransactionAdapter
 import com.smartbill.app.data.Transaction
+import com.smartbill.app.data.WeChatBillImporter
+import com.smartbill.app.ui.StatisticsActivity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -40,6 +45,10 @@ class MainActivity : AppCompatActivity() {
     private val expenseCategories = listOf(
         "餐饮", "娱乐", "购物", "交通", "日用", "人情往来", "居住", "医疗", "教育", "其他"
     )
+
+    private val weChatBillPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) previewWeChatBill(uri)
+    }
 
     private val smsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -122,6 +131,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupClickListeners() {
         binding.btnAddExpense.setOnClickListener { showManualExpenseDialog() }
+        binding.btnImportWeChat.setOnClickListener {
+            weChatBillPicker.launch(arrayOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"))
+        }
+        binding.btnOpenStatistics.setOnClickListener {
+            startActivity(Intent(this, StatisticsActivity::class.java))
+        }
         binding.btnSettings.setOnClickListener {
             showSettingsDialog()
         }
@@ -132,10 +147,82 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun previewWeChatBill(uri: Uri) {
+        binding.btnImportWeChat.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val bill = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use(WeChatBillImporter::read)
+                        ?: throw IllegalArgumentException("无法打开账单文件")
+                }
+                val rows = viewModel.newImportRows(bill.transactions)
+                showWeChatBillPreview(bill, rows, viewModel.possibleWeChatDuplicates(rows))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("无法导入微信账单")
+                    .setMessage(if (error is IllegalArgumentException) error.message else "请选择解压后的微信个人对账 XLSX 文件。")
+                    .setPositiveButton("确定", null)
+                    .show()
+            } finally {
+                binding.btnImportWeChat.isEnabled = true
+            }
+        }
+    }
+
+    private fun showWeChatBillPreview(
+        bill: WeChatBillImporter.Bill,
+        rows: List<Transaction>,
+        possibleDuplicates: List<Transaction>
+    ) {
+        val income = rows.count { it.isIncome }
+        val unclassified = rows.count { it.category == WeChatBillImporter.UNCATEGORIZED }
+        val duplicates = bill.transactions.size - rows.size
+        val preview = "新增支出 ${rows.size - income} 笔，收入 $income 笔\n" +
+            "其中待分类 $unclassified 笔\n" +
+            "重复 $duplicates 笔，跳过 ${bill.skipped} 笔" +
+            if (possibleDuplicates.isEmpty()) "" else {
+                "\n有 ${possibleDuplicates.size} 笔与旧账金额相同、时间相差两分钟以内。\n" +
+                    "可跳过这些疑似重复的账单，或确认全部导入。"
+            }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("导入预览")
+            .setMessage(preview)
+            .setNegativeButton("关闭", null)
+        if (rows.isNotEmpty()) {
+            dialog.setPositiveButton("确认导入") { _, _ ->
+                if (possibleDuplicates.isEmpty()) {
+                    importWeChatRows(rows)
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle("处理疑似重复账单")
+                        .setItems(arrayOf("跳过疑似重复", "全部导入")) { _, choice ->
+                            val accepted = if (choice == 0) rows - possibleDuplicates.toSet() else rows
+                            importWeChatRows(accepted)
+                        }
+                        .setNegativeButton("取消", null)
+                        .show()
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun importWeChatRows(rows: List<Transaction>) {
+        lifecycleScope.launch {
+            saveExpenseChange {
+                val inserted = viewModel.insertImported(rows)
+                Toast.makeText(this@MainActivity, "已导入 $inserted 笔", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun showCategoryDialog(transaction: Transaction) {
-        val categories = (expenseCategories + transaction.category).distinct().toTypedArray()
+        val options = if (transaction.isIncome) listOf("工资", "人情往来", "退款", "其他") else expenseCategories
+        val categories = (options + WeChatBillImporter.UNCATEGORIZED + transaction.category).distinct().toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("修改支出分类")
+            .setTitle("修改用途分类")
             .setSingleChoiceItems(categories, categories.indexOf(transaction.category)) { dialog, index ->
                 lifecycleScope.launch {
                     if (saveExpenseChange { viewModel.updateCategory(transaction.id, categories[index]) }) {

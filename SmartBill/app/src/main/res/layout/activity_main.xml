@@ -54,6 +54,33 @@
             android:src="@android:drawable/ic_menu_manage" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/ledgerActions"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="8dp"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/btnImportWeChat"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="导入微信账单" />
+
+        <Button
+            android:id="@+id/btnOpenStatistics"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="统计" />
+    </LinearLayout>
+
     <!-- 统计卡片 -->
     <androidx.cardview.widget.CardView
         android:id="@+id/statisticsCard"
@@ -62,7 +89,7 @@
         android:layout_margin="16dp"
         app:cardCornerRadius="8dp"
         app:cardElevation="2dp"
-        app:layout_constraintTop_toBottomOf="@id/toolbar">
+        app:layout_constraintTop_toBottomOf="@id/ledgerActions">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -172,7 +199,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="8dp"
-        android:text="消费记录"
+        android:text="收支记录"
         android:textColor="#333333"
         android:textSize="16sp"
         android:textStyle="bold"
@@ -213,7 +240,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="暂无消费记录"
+            android:text="暂无收支记录"
             android:textColor="#999999"
             android:textSize="16sp" />
 
